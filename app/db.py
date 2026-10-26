@@ -1,6 +1,7 @@
 """Работа с SQLite через стандартный sqlite3."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -30,6 +31,13 @@ CREATE TABLE IF NOT EXISTS journal (
     created_at TEXT NOT NULL,
     event TEXT NOT NULL,
     details TEXT
+);
+CREATE TABLE IF NOT EXISTS file_analysis (
+    file_id INTEGER PRIMARY KEY REFERENCES files(id),
+    quality_json TEXT,
+    text TEXT,
+    text_meta_json TEXT,
+    error TEXT
 );
 """
 
@@ -117,3 +125,46 @@ def get_journal(conn: sqlite3.Connection, application_id: int) -> list[dict]:
             (application_id,),
         )
     ]
+
+
+def save_analysis(
+    conn: sqlite3.Connection,
+    file_id: int,
+    quality: dict | None = None,
+    text: str | None = None,
+    text_meta: dict | None = None,
+    error: str | None = None,
+) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO file_analysis (file_id, quality_json, text, text_meta_json, error)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (
+            file_id,
+            json.dumps(quality, ensure_ascii=False) if quality is not None else None,
+            text,
+            json.dumps(text_meta, ensure_ascii=False) if text_meta is not None else None,
+            error,
+        ),
+    )
+
+
+def get_analysis(conn: sqlite3.Connection, application_id: int) -> dict[int, dict]:
+    """Результаты анализа файлов заявки: {file_id: {...}}."""
+    rows = conn.execute(
+        "SELECT a.file_id, a.quality_json, a.text, a.text_meta_json, a.error"
+        " FROM file_analysis a JOIN files f ON f.id = a.file_id WHERE f.application_id = ?",
+        (application_id,),
+    )
+    return {
+        r["file_id"]: {
+            "quality": json.loads(r["quality_json"]) if r["quality_json"] else None,
+            "text": r["text"],
+            "text_meta": json.loads(r["text_meta_json"]) if r["text_meta_json"] else None,
+            "error": r["error"],
+        }
+        for r in rows
+    }
+
+
+def set_status(conn: sqlite3.Connection, application_id: int, status: str) -> None:
+    conn.execute("UPDATE applications SET status = ? WHERE id = ?", (status, application_id))

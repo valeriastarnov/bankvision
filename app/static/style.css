@@ -11,3 +11,10 @@ button { align-self: flex-start; padding: 8px 18px; background: #1f3a5f; color: 
 .errors { background: #fde8e8; border: 1px solid #f0a8a8; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
 table { border-collapse: collapse; width: 100%; background: #fff; }
 th, td { border: 1px solid #dde1e6; padding: 6px 10px; text-align: left; font-size: .9rem; }
+.file { background: #fff; border: 1px solid #dde1e6; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.file h3 { margin: 0 0 6px; font-size: 1rem; }
+.metrics { color: #5b6672; font-size: .85rem; margin: 4px 0; }
+.ok { color: #1d6b3a; }
+.warnings { background: #fff4d6; border: 1px solid #e9d27a; border-radius: 6px; padding: 8px 8px 8px 28px; }
+.error { color: #a32020; font-weight: 600; }
+pre { white-space: pre-wrap; background: #f6f7f9; padding: 8px; border-radius: 6px; font-size: .85rem; }

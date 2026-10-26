@@ -1,18 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Заявка №{{ application.id }} — BankVision{% endblock %}
+{% set status_labels = {
+  "uploaded": "файлы загружены",
+  "processed": "обработана",
+  "processed_with_errors": "обработана с ошибками",
+} %}
+{% set source_labels = {"text_layer": "текстовый слой PDF", "ocr": "OCR (Tesseract)"} %}
+{% macro extracted_text(a) %}
+  {% if a.text is not none %}
+    <details>
+      <summary>
+        Распознанный текст — источник:
+        {% for s in a.text_meta.sources %}{{ source_labels.get(s, s) }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% if a.text_meta.confidence is defined %}· уверенность Tesseract {{ a.text_meta.confidence }}/100{% endif %}
+      </summary>
+      <pre>{{ a.text or "(текст не найден)" }}</pre>
+    </details>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
 <h1>Заявка №{{ application.id }}</h1>
-<p>Создана: {{ application.created_at }} · Статус: {{ application.status }}</p>
+<p>Создана: {{ application.created_at }} · Статус: {{ status_labels.get(application.status, application.status) }}</p>
+<p class="hint">Текст ниже — сырой результат автоматического распознавания, без исправлений.
+  Извлечение полей и ручная проверка будут добавлены в следующей итерации.</p>
 
 <h2>Фото ({{ application.photos | length }})</h2>
-<ul>
-  {% for f in application.photos %}<li>{{ f.original_name }} — {{ (f.size / 1024) | round(1) }} КБ</li>{% endfor %}
-</ul>
+{% for f in application.photos %}
+  {% set a = analysis.get(f.id, {}) %}
+  <section class="file">
+    <h3>{{ f.original_name }} <span class="hint">{{ (f.size / 1024) | round(1) }} КБ</span></h3>
+    {% if a.quality %}
+      {% set q = a.quality %}
+      <p class="metrics">{{ q.width }}×{{ q.height }} px · резкость {{ q.blur_score }} · яркость {{ q.brightness }}</p>
+      {% if q.ok %}
+        <p class="ok">Качество фото: замечаний нет.</p>
+      {% else %}
+        <ul class="warnings">
+          {% for h in q.hints %}<li>{{ h }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endif %}
+    {% if a.error %}<p class="error">{{ a.error }}</p>{% endif %}
+    {{ extracted_text(a) }}
+  </section>
+{% endfor %}
 
 <h2>Документ</h2>
-<ul>
-  {% for f in application.documents %}<li>{{ f.original_name }} — {{ (f.size / 1024) | round(1) }} КБ</li>{% endfor %}
-</ul>
+{% for f in application.documents %}
+  {% set a = analysis.get(f.id, {}) %}
+  <section class="file">
+    <h3>{{ f.original_name }} <span class="hint">{{ (f.size / 1024) | round(1) }} КБ</span></h3>
+    {% if a.error %}<p class="error">{{ a.error }}</p>{% endif %}
+    {{ extracted_text(a) }}
+  </section>
+{% endfor %}
 
 <h2>Журнал</h2>
 <table>
@@ -22,6 +64,5 @@
   {% endfor %}
 </table>
 
-<p class="hint">Распознавание и оценка будут добавлены в следующих итерациях.</p>
 <p><a href="/">← Новая заявка</a></p>
 {% endblock %}

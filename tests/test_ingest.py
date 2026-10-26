@@ -27,8 +27,8 @@ def test_valid_upload_saves_files(client, settings, jpg_bytes, png_bytes, pdf_by
         ("passport.pdf", pdf_bytes, "application/pdf"),
     )
     assert resp.status_code == 201, resp.text
-    body = resp.json()
-    assert body["status"] == "uploaded"
+    body = resp.json()["application"]
+    assert body["status"] == "processed"
     kinds = sorted(f["kind"] for f in body["files"])
     assert kinds == ["document", "photo", "photo"]
 

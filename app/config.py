@@ -26,6 +26,29 @@ class Settings:
         default_factory=lambda: frozenset({".pdf", ".jpg", ".jpeg", ".png"})
     )
 
+    # --- Качество фото ---
+    # Пороги заданы заранее по общепринятым эвристикам, не откалиброваны на реальных
+    # фото. Метрики считаются на изображении, приведённом к длинной стороне
+    # quality_long_side, чтобы не зависеть от разрешения камеры.
+    quality_long_side: int = 1024
+    # Дисперсия Лапласиана (Pech-Pacheco et al., 2000); 100 — распространённая эвристика.
+    blur_laplacian_min: float = 100.0
+    # Средняя яркость в оттенках серого, шкала 0–255.
+    brightness_min: float = 60.0
+    brightness_max: float = 200.0
+    # Минимальное разрешение исходного фото (длинная × короткая сторона).
+    min_long_side: int = 800
+    min_short_side: int = 600
+
+    # --- PDF и OCR ---
+    ocr_lang: str = "rus+eng"
+    # Страница без текстового слоя: меньше этого числа непробельных символов.
+    pdf_min_text_chars: int = 30
+    pdf_ocr_dpi: int = 300
+    # Диапазон и шаг поиска угла наклона при выравнивании, градусы.
+    deskew_max_angle: float = 10.0
+    deskew_step: float = 0.5
+
     @classmethod
     def from_env(cls) -> "Settings":
         data_dir = Path(os.environ.get("BANKVISION_DATA_DIR", BASE_DIR / "data"))

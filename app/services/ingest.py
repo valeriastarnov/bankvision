@@ -78,7 +78,7 @@ def _check_file(
     data = _read_limited(incoming.stream, settings.max_file_size)
     if data is None:
         limit_mb = settings.max_file_size / (1024 * 1024)
-        return None, f"{label} «{name}»: файл больше {limit_mb:g} МБ.", True
+        return None, f"{label} «{name}»: файл больше {round(limit_mb, 1):g} МБ.", True
     if not data:
         return None, f"{label} «{name}»: файл пустой.", False
 

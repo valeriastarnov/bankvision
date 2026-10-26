@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
+  "kind": "plate_photo",
+  "variant": "dark",
+  "distortions": {
+    "brightness_factor": 0.22,
+    "noise_sigma": 4.0
+  },
+  "fields": {
+    "equipment_type": "Станок токарно-винторезный",
+    "manufacturer": "ТОКАРЬПРОМ-СИНТЕЗ",
+    "model": "ТС-1640М",
+    "serial_number": "24-07815",
+    "year": "2018",
+    "characteristics": {
+      "max_diameter_mm": "400",
+      "center_distance_mm": "1000",
+      "power_kw": "7.5",
+      "weight_kg": "2800"
+    }
+  },
+  "plate_text": [
+    "ТОКАРЬПРОМ-СИНТЕЗ",
+    "Станок токарно-винторезный",
+    "Модель: ТС-1640М",
+    "Зав. №: 24-07815",
+    "Год выпуска: 2018",
+    "Мощность: 7.5 кВт",
+    "Масса: 2800 кг",
+    "СИНТЕТИЧЕСКИЙ ОБРАЗЕЦ"
+  ]
+}

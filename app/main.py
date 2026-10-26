@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import db
 from app.config import Settings
+from app.services.analysis import analyze_application
 from app.services.ingest import IncomingFile, UploadError, create_application_with_files
 
 APP_DIR = Path(__file__).resolve().parent
@@ -38,17 +39,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs = _to_incoming(document)
         if len(docs) > 1:
             raise UploadError(["Загрузите один документ."])
-        return create_application_with_files(
+        application_id = create_application_with_files(
             _to_incoming(photos), docs[0] if docs else None, settings
         )
+        # Обработка синхронная: для MVP с 1–5 фото это несколько секунд.
+        analyze_application(application_id, settings)
+        return application_id
 
     def _load(application_id: int):
         with db.connect(settings.db_path) as conn:
             application = db.get_application(conn, application_id)
             journal = db.get_journal(conn, application_id) if application else []
+            analysis = db.get_analysis(conn, application_id) if application else {}
         if application is None:
             raise HTTPException(status_code=404, detail="Заявка не найдена.")
-        return application, journal
+        return application, journal, analysis
 
     # ---------- HTML ----------
 
@@ -77,9 +82,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/applications/{application_id}", response_class=HTMLResponse)
     def view_application(request: Request, application_id: int):
-        application, journal = _load(application_id)
+        application, journal, analysis = _load(application_id)
         return templates.TemplateResponse(
-            request, "application.html", {"application": application, "journal": journal}
+            request,
+            "application.html",
+            {"application": application, "journal": journal, "analysis": analysis},
         )
 
     # ---------- API ----------
@@ -93,13 +100,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application_id = _create(photos, document)
         except UploadError as err:
             return JSONResponse(status_code=_error_status(err), content={"errors": err.messages})
-        application, _ = _load(application_id)
-        return application
+        application, _, analysis = _load(application_id)
+        return {"application": application, "analysis": analysis}
 
     @app.get("/api/applications/{application_id}")
     def api_get(application_id: int):
-        application, journal = _load(application_id)
-        return {"application": application, "journal": journal}
+        application, journal, analysis = _load(application_id)
+        return {"application": application, "journal": journal, "analysis": analysis}
 
     return app
 

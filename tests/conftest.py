@@ -24,7 +24,7 @@ def settings(tmp_path: Path) -> Settings:
         data_dir=tmp_path,
         upload_dir=tmp_path / "uploads",
         db_path=tmp_path / "test.db",
-        max_file_size=200 * 1024,
+        max_file_size=2 * 1024 * 1024,
     )
 
 
