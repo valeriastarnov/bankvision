@@ -74,6 +74,6 @@ def analyze_application(application_id: int, settings: Settings) -> str:
 
     status = STATUS_PROCESSED_WITH_ERRORS if has_errors else STATUS_PROCESSED
     with db.connect(settings.db_path) as conn:
-        review.save_default_finals(conn, application_id)
+        review.save_default_finals(conn, application_id, settings)
         db.set_status(conn, application_id, status)
     return status

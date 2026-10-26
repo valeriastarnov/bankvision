@@ -4,7 +4,18 @@
   "document": "из документа",
   "photo": "с фото",
   "manual": "исправлено вручную",
+  "chosen_document": "выбрано сотрудником: из документа",
+  "chosen_photo": "выбрано сотрудником: с фото",
+  "pending": "требует решения сотрудника",
   "none": "нет данных",
+} %}
+{% set status_icons = {
+  "match": "✓",
+  "normalized_match": "≈",
+  "mismatch": "✗",
+  "not_confirmed": "?",
+  "single_source": "◐",
+  "missing": "∅",
 } %}
 {% macro source_cell(item) %}
   {% if item %}
@@ -12,6 +23,9 @@
     <div class="fragment" title="Исходная строка распознанного текста">
       {{ item.source_name }}: «{{ item.fragment }}»{% if item.method == "heuristic" %} · по виду строки{% endif %}
     </div>
+    {% if item.low_quality %}
+      <div class="quality-note">фото с флагом качества: {{ item.quality_flags | join(", ") }}</div>
+    {% endif %}
   {% else %}
     <span class="missing">не найдено</span>
   {% endif %}
@@ -20,9 +34,11 @@
 {% block content %}
 <h1>Проверка полей — заявка №{{ application.id }}</h1>
 <p class="hint">
-  Значения извлечены правилами из распознанного текста. Итоговое значение по умолчанию
-  берётся из документа, при его отсутствии — с фото. Расхождения между документом и фото
-  будут проверяться на следующем шаге. Проверьте поля и исправьте ошибки распознавания.
+  Значения извлечены правилами из распознанного текста и сверены между документом и фото.
+  Для сравнения значения нормализуются (регистр, кириллица/латиница, пробелы, дефисы;
+  в заводском номере — O/0 и I/l/1), но показываются в исходном виде.
+  Если значения расходятся или не подтверждены, итог не выбирается автоматически —
+  выберите источник или введите значение.
 </p>
 
 {% if saved is not none %}
@@ -31,18 +47,51 @@
 </p>
 {% endif %}
 
+<section class="flags" aria-labelledby="flags-title">
+  <h2 id="flags-title">Флаги заявки ({{ flags | length }})</h2>
+  {% if flags %}
+    <ul>{% for f in flags %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% else %}
+    <p class="ok">Расхождений, неподтверждённых и отсутствующих ключевых полей нет.</p>
+  {% endif %}
+</section>
+
 <form method="post" action="/applications/{{ application.id }}/review" class="review-form">
   <div class="table-wrap">
   <table class="review">
-    <tr><th>Поле</th><th>Из документа</th><th>С фото</th><th>Итоговое значение</th></tr>
+    <tr><th>Поле</th><th>Из документа</th><th>С фото</th><th>Сверка</th><th>Итоговое значение</th></tr>
     {% for row in rows %}
-    <tr>
+    {% set c = row.check %}
+    <tr class="row-{{ c.status }}">
       <th scope="row">{{ row.label }}</th>
       <td>{{ source_cell(row.document) }}</td>
       <td>
         {% for p in row.photos %}{{ source_cell(p) }}{% else %}<span class="missing">не найдено</span>{% endfor %}
       </td>
       <td>
+        <span class="status status-{{ c.status }}">
+          <span aria-hidden="true">{{ status_icons[c.status] }}</span> {{ c.status_label }}
+        </span>
+        {% if c.normalization %}
+          <div class="fragment">нормализовано: {{ c.normalization | join("; ") }}</div>
+        {% endif %}
+        {% if c.note %}<div class="fragment">{{ c.note }}</div>{% endif %}
+      </td>
+      <td>
+        {% if c.needs_decision and row.final.origin == "pending" %}
+          <fieldset class="choice">
+            <legend>Выберите значение:</legend>
+            {% if row.document %}
+              <label><input type="radio" name="source__{{ row.field }}" value="document"
+                data-value="{{ row.document.value }}"> из документа: <b>{{ row.document.value }}</b></label>
+            {% endif %}
+            {% for p in row.photos %}
+              <label><input type="radio" name="source__{{ row.field }}" value="photo:{{ p.file_id }}"
+                data-value="{{ p.value }}"> с фото {{ p.source_name }}: <b>{{ p.value }}</b></label>
+            {% endfor %}
+            <label><input type="radio" name="source__{{ row.field }}" value="manual"> ввести вручную:</label>
+          </fieldset>
+        {% endif %}
         <input type="text" name="field__{{ row.field }}" value="{{ row.final.value or '' }}"
                aria-label="{{ row.label }}">
         <span class="badge origin-{{ row.final.origin }}">{{ origin_labels.get(row.final.origin, row.final.origin) }}</span>
@@ -51,8 +100,18 @@
     {% endfor %}
   </table>
   </div>
-  <button type="submit">Сохранить правки</button>
+  <button type="submit">Сохранить</button>
 </form>
+<script>
+  // Выбор источника подставляет его значение в поле ввода; «вручную» — фокус на поле.
+  document.querySelectorAll(".choice input[type=radio]").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const input = radio.closest("td").querySelector("input[type=text]");
+      if (radio.dataset.value !== undefined) input.value = radio.dataset.value;
+      else input.focus();
+    });
+  });
+</script>
 
 <h2>Журнал правок</h2>
 {% if edits %}

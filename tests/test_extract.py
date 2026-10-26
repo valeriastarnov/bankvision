@@ -200,7 +200,8 @@ def test_api_edit_clear_value_and_unknown_field(client):
     app_id = _upload(client, "plate_clear.jpg", "passport_text.pdf")
     resp = client.put(f"/api/applications/{app_id}/fields", json={"weight_kg": ""})
     assert resp.status_code == 200
-    assert resp.json()["changes"] == [{"field": "weight_kg", "old": "2800", "new": None}]
+    assert resp.json()["changes"] == [
+        {"field": "weight_kg", "old": "2800", "new": None, "origin": "manual"}]
 
     bad = client.put(f"/api/applications/{app_id}/fields", json={"price": "1"})
     assert bad.status_code == 400

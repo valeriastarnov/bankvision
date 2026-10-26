@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import db
 from app.config import Settings
-from app.services import review
+from app.services import crosscheck, review
 from app.services.analysis import analyze_application
 from app.services.ingest import IncomingFile, UploadError, create_application_with_files
 
@@ -56,15 +56,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Заявка не найдена.")
         return application, journal, analysis
 
-    def _fields(application_id: int) -> tuple[list[dict], dict[str, dict]]:
+    def _fields(application_id: int):
+        """(извлечённые поля, итоговые значения, сверка, общий список флагов)."""
+        application, _, analysis = _load(application_id)
         with db.connect(settings.db_path) as conn:
-            return db.get_extracted(conn, application_id), db.get_final(conn, application_id)
+            extracted = db.get_extracted(conn, application_id)
+            finals = db.get_final(conn, application_id)
+            checks = review.compute_checks(conn, application_id, settings)
+        photo_flags = {
+            f.original_name: (analysis.get(f.id, {}).get("quality") or {}).get("flags", [])
+            for f in application.photos
+        }
+        return extracted, finals, checks, crosscheck.flags(checks, photo_flags)
 
-    def _edit(application_id: int, edits: dict[str, str | None]) -> list[dict]:
+    def _edit(application_id: int, edits: dict[str, str | None],
+              sources: dict[str, str] | None = None) -> list[dict]:
         _load(application_id)  # 404, если заявки нет
         try:
-            return review.apply_edits(settings, application_id, edits)
-        except review.UnknownFieldError as exc:
+            return review.apply_edits(settings, application_id, edits, sources)
+        except (review.UnknownFieldError, review.InvalidSourceError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # ---------- HTML ----------
@@ -104,14 +114,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/applications/{application_id}/review", response_class=HTMLResponse)
     def review_fields(request: Request, application_id: int, saved: int | None = None):
         application, journal, _ = _load(application_id)
-        extracted, finals = _fields(application_id)
+        _, finals, checks, flag_list = _fields(application_id)
         edits = [j for j in journal if j["event"] == review.EVENT_FIELD_EDITED]
         return templates.TemplateResponse(
             request,
             "review.html",
             {
                 "application": application,
-                "rows": review.review_rows(extracted, finals),
+                "rows": review.review_rows(checks, finals),
+                "flags": flag_list,
                 "edits": edits,
                 "saved": saved,
             },
@@ -120,9 +131,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/applications/{application_id}/review")
     async def save_review(request: Request, application_id: int):
         form = await request.form()
-        prefix = "field__"
-        edits = {k[len(prefix):]: str(v) for k, v in form.items() if k.startswith(prefix)}
-        changes = _edit(application_id, edits)
+        def by_prefix(prefix: str) -> dict[str, str]:
+            return {k[len(prefix):]: str(v) for k, v in form.items() if k.startswith(prefix)}
+
+        changes = _edit(application_id, by_prefix("field__"), by_prefix("source__"))
         return RedirectResponse(
             f"/applications/{application_id}/review?saved={len(changes)}", status_code=303
         )
@@ -148,14 +160,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/applications/{application_id}/fields")
     def api_fields(application_id: int):
-        _load(application_id)
-        extracted, finals = _fields(application_id)
-        return {"extracted": extracted, "final": finals}
+        extracted, finals, checks, flag_list = _fields(application_id)
+        return {
+            "extracted": extracted,
+            "final": finals,
+            "crosscheck": {name: c.to_dict() for name, c in checks.items()},
+            "flags": flag_list,
+        }
 
     @app.put("/api/applications/{application_id}/fields")
     def api_edit_fields(application_id: int, edits: dict[str, str | None] = Body(...)):
         changes = _edit(application_id, edits)
-        _, finals = _fields(application_id)
+        _, finals, _, _ = _fields(application_id)
         return {"changes": changes, "final": finals}
 
     return app
