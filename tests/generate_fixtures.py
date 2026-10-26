@@ -110,29 +110,38 @@ def _add_noise(img: Image.Image, rng: np.random.Generator, sigma: float) -> Imag
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
-def render_plate(eq: dict) -> Image.Image:
-    """Чёткая «фотография» шильдика: металлическая табличка на тёмном фоне станка."""
+def render_plate(
+    eq: dict,
+    background: tuple[int, int, int] = (62, 84, 78),
+    plate_top_shade: int = 205,
+    font_sizes: tuple[int, int] = (52, 58),
+    line_step: int = 85,
+) -> Image.Image:
+    """Чёткая «фотография» шильдика: металлическая табличка на тёмном фоне станка.
+
+    Параметры оформления по умолчанию — основная выборка; отложенная выборка
+    использует другие, чтобы проверка не шла на том же внешнем виде."""
     width, height = 1600, 1100
-    photo = Image.new("RGB", (width, height), (62, 84, 78))  # окраска станины
+    photo = Image.new("RGB", (width, height), background)  # окраска станины
     draw = ImageDraw.Draw(photo)
 
     px0, py0, px1, py1 = 180, 150, 1420, 950
     # Металлическая табличка с лёгким вертикальным градиентом.
     for y in range(py0, py1):
-        shade = int(205 - 25 * (y - py0) / (py1 - py0))
+        shade = int(plate_top_shade - 25 * (y - py0) / (py1 - py0))
         draw.line([(px0, y), (px1, y)], fill=(shade, shade, shade - 6))
     draw.rectangle([px0, py0, px1, py1], outline=(90, 90, 90), width=6)
     draw.rectangle([px0 + 20, py0 + 20, px1 - 20, py1 - 20], outline=(40, 40, 40), width=3)
     for cx, cy in [(px0 + 45, py0 + 45), (px1 - 45, py0 + 45), (px0 + 45, py1 - 45), (px1 - 45, py1 - 45)]:
         draw.ellipse([cx - 14, cy - 14, cx + 14, cy + 14], fill=(120, 120, 120), outline=(60, 60, 60))
 
-    regular = ImageFont.truetype(str(find_font("regular")), 52)
-    bold = ImageFont.truetype(str(find_font("bold")), 58)
+    regular = ImageFont.truetype(str(find_font("regular")), font_sizes[0])
+    bold = ImageFont.truetype(str(find_font("bold")), font_sizes[1])
     y = py0 + 75
     for text, is_bold in plate_lines(eq):
         font = bold if is_bold else regular
         draw.text((px0 + 100, y), text, font=font, fill=(25, 25, 25))
-        y += 85
+        y += line_step
     return photo
 
 
@@ -344,7 +353,85 @@ def generate(out: Path = FIXTURES_DIR) -> list[Path]:
     return written
 
 
+# ---------- отложенная выборка для проверки метрики качества ----------
+# Не используется в тестах и при выборе параметров: метрика прогоняется на ней один раз.
+
+HOLDOUT_DIR = FIXTURES_DIR / "holdout"
+HOLDOUT_SEED = 777
+EQUIPMENT_HOLDOUT = {
+    "equipment_type": "Станок токарный",
+    "manufacturer": "КРУГОВИК-ДЕМО",
+    "model": "КД-250Т",
+    "serial_number": "31-55702",
+    "year": "2015",
+    "max_diameter_mm": None,
+    "center_distance_mm": None,
+    "power_kw": "4.0",
+    "weight_kg": "1450",
+}
+# Другое оформление, чем у основной выборки.
+HOLDOUT_STYLE = {"background": (48, 52, 96), "plate_top_shade": 218,
+                 "font_sizes": (46, 52), "line_step": 80}
+
+
+def _motion_blur(img: Image.Image, length: int) -> Image.Image:
+    import cv2
+
+    kernel = np.zeros((length, length), dtype=np.float32)
+    kernel[length // 2, :] = 1.0 / length  # горизонтальный смаз (дрожание руки)
+    return Image.fromarray(cv2.filter2D(np.asarray(img), -1, kernel))
+
+
+def generate_holdout(out: Path = HOLDOUT_DIR) -> list[Path]:
+    rng = np.random.default_rng(HOLDOUT_SEED)
+    out.mkdir(parents=True, exist_ok=True)
+    eq = EQUIPMENT_HOLDOUT
+    base = render_plate(eq, **HOLDOUT_STYLE)
+    noise_sigma = 5.0
+
+    def gauss(r: float):
+        return lambda im: im.filter(ImageFilter.GaussianBlur(r))
+
+    def bright(k: float):
+        return lambda im: ImageEnhance.Brightness(im).enhance(k)
+
+    # (имя, преобразование до шума, параметры, итоговый размер или None, качество JPEG)
+    variants = [("clear", None, {}, None, PHOTO_JPEG_QUALITY)]
+    variants += [(f"gauss_{r}", gauss(r), {"gaussian_blur_radius": r}, None, PHOTO_JPEG_QUALITY)
+                 for r in (1.0, 1.5, 2.0, 2.5, 3.0, 5.0)]
+    variants += [(f"motion_{n}", lambda im, n=n: _motion_blur(im, n), {"motion_blur_px": n}, None,
+                  PHOTO_JPEG_QUALITY) for n in (9, 21)]
+    variants += [(f"dark_{k}", bright(k), {"brightness_factor": k}, None, PHOTO_JPEG_QUALITY)
+                 for k in (0.50, 0.42, 0.36, 0.30, 0.18)]
+    variants += [(f"bright_{k}", bright(k), {"brightness_factor": k}, None, PHOTO_JPEG_QUALITY)
+                 for k in (1.35, 1.6)]
+    variants += [("dark_0.36_gauss_2.0", lambda im: bright(0.36)(gauss(2.0)(im)),
+                  {"gaussian_blur_radius": 2.0, "brightness_factor": 0.36}, None, PHOTO_JPEG_QUALITY)]
+    variants += [(f"lowres_{w}", None, {"resize_to": [w, round(w * 1100 / 1600)]},
+                  (w, round(w * 1100 / 1600)), PHOTO_JPEG_QUALITY) for w in (760, 960)]
+    variants += [("jpeg_q40", None, {"jpeg_quality": 40}, None, 40)]
+
+    written = []
+    for name, transform, params, size, quality in variants:
+        img = transform(base) if transform else base
+        img = _add_noise(img, rng, noise_sigma)
+        if size:
+            img = img.resize(size, Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        ref = _plate_ref(name, params | {"noise_sigma": noise_sigma}, eq, "holdout",
+                         {"seed": HOLDOUT_SEED,
+                          "note_holdout": "Отложенная выборка: только для однократной проверки метрики."})
+        _write(out, f"holdout_{name}.jpg", buf.getvalue(), ref)
+        written.append(out / f"holdout_{name}.jpg")
+    return written
+
+
 if __name__ == "__main__":
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else FIXTURES_DIR
-    for path in generate(target):
+    args = sys.argv[1:]
+    if args and args[0] == "--holdout":
+        paths = generate_holdout(Path(args[1]) if len(args) > 1 else HOLDOUT_DIR)
+    else:
+        paths = generate(Path(args[0]) if args else FIXTURES_DIR)
+    for path in paths:
         print(path)

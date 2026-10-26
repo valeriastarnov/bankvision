@@ -1,0 +1,34 @@
+{
+  "synthetic": true,
+  "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
+  "kind": "plate_photo",
+  "variant": "dark_0.42",
+  "scenario": "holdout",
+  "distortions": {
+    "brightness_factor": 0.42,
+    "noise_sigma": 5.0
+  },
+  "fields": {
+    "equipment_type": "Станок токарный",
+    "manufacturer": "КРУГОВИК-ДЕМО",
+    "model": "КД-250Т",
+    "serial_number": "31-55702",
+    "year": "2015",
+    "max_diameter_mm": null,
+    "center_distance_mm": null,
+    "power_kw": "4.0",
+    "weight_kg": "1450"
+  },
+  "plate_text": [
+    "КРУГОВИК-ДЕМО",
+    "Станок токарный",
+    "Модель: КД-250Т",
+    "Зав. №: 31-55702",
+    "Год выпуска: 2015",
+    "Мощность: 4.0 кВт",
+    "Масса: 1450 кг",
+    "СИНТЕТИЧЕСКИЙ ОБРАЗЕЦ"
+  ],
+  "seed": 777,
+  "note_holdout": "Отложенная выборка: только для однократной проверки метрики."
+}
