@@ -1,0 +1,27 @@
+{
+  "synthetic": true,
+  "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
+  "kind": "passport_pdf",
+  "variant": "text_layer",
+  "scenario": "insufficient_data",
+  "distortions": {},
+  "fields": {
+    "equipment_type": "Станок токарно-винторезный",
+    "manufacturer": null,
+    "model": "ТС-1640М",
+    "serial_number": null,
+    "year": null,
+    "max_diameter_mm": null,
+    "center_distance_mm": null,
+    "power_kw": null,
+    "weight_kg": null
+  },
+  "has_text_layer": true,
+  "document_text": [
+    "ПАСПОРТ ОБОРУДОВАНИЯ",
+    "Синтетический образец для демонстрации. Не является реальным документом.",
+    "",
+    "Наименование: Станок токарно-винторезный",
+    "Модель: ТС-1640М"
+  ]
+}

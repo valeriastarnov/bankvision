@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
+  "kind": "plate_photo",
+  "variant": "clear",
+  "scenario": "no_analogs",
+  "distortions": {
+    "noise_sigma": 4.0
+  },
+  "fields": {
+    "equipment_type": "Станок токарный",
+    "manufacturer": "ВЕКТОРСТАН-ДЕМО",
+    "model": "ЛТ-3200Ф",
+    "serial_number": "77-31004",
+    "year": "2021",
+    "max_diameter_mm": null,
+    "center_distance_mm": null,
+    "power_kw": "5.5",
+    "weight_kg": "1900"
+  },
+  "plate_text": [
+    "ВЕКТОРСТАН-ДЕМО",
+    "Станок токарный",
+    "Модель: ЛТ-3200Ф",
+    "Зав. №: 77-31004",
+    "Год выпуска: 2021",
+    "Мощность: 5.5 кВт",
+    "Масса: 1900 кг",
+    "СИНТЕТИЧЕСКИЙ ОБРАЗЕЦ"
+  ],
+  "pair": "passport_unknown_model.pdf",
+  "expected_in_analogs": false
+}

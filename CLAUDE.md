@@ -36,7 +36,9 @@ Windows: путь к Tesseract задаётся в `app/config.py` через п
 ```
 app/main.py, config.py, db.py, models.py
 app/services/ingest.py, pdf.py, image_quality.py, ocr.py, extract.py,
-             crosscheck.py, valuation.py, scoring.py, routing.py, report.py
+             crosscheck.py, valuation.py, scoring.py, routing.py, report.py,
+             analysis.py (оркестрация обработки заявки после загрузки),
+             review.py (итоговые значения полей, ручные правки и журнал)
 app/templates/  app/static/
 data/analogs.csv, data/analogs_README.md
 docs/methodology_valuation.md, docs/methodology_score.md

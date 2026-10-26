@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import db
 from app.config import Settings
+from app.services import review
 from app.services.analysis import analyze_application
 from app.services.ingest import IncomingFile, UploadError, create_application_with_files
 
@@ -55,6 +56,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Заявка не найдена.")
         return application, journal, analysis
 
+    def _fields(application_id: int) -> tuple[list[dict], dict[str, dict]]:
+        with db.connect(settings.db_path) as conn:
+            return db.get_extracted(conn, application_id), db.get_final(conn, application_id)
+
+    def _edit(application_id: int, edits: dict[str, str | None]) -> list[dict]:
+        _load(application_id)  # 404, если заявки нет
+        try:
+            return review.apply_edits(settings, application_id, edits)
+        except review.UnknownFieldError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # ---------- HTML ----------
 
     @app.get("/", response_class=HTMLResponse)
@@ -89,6 +101,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {"application": application, "journal": journal, "analysis": analysis},
         )
 
+    @app.get("/applications/{application_id}/review", response_class=HTMLResponse)
+    def review_fields(request: Request, application_id: int, saved: int | None = None):
+        application, journal, _ = _load(application_id)
+        extracted, finals = _fields(application_id)
+        edits = [j for j in journal if j["event"] == review.EVENT_FIELD_EDITED]
+        return templates.TemplateResponse(
+            request,
+            "review.html",
+            {
+                "application": application,
+                "rows": review.review_rows(extracted, finals),
+                "edits": edits,
+                "saved": saved,
+            },
+        )
+
+    @app.post("/applications/{application_id}/review")
+    async def save_review(request: Request, application_id: int):
+        form = await request.form()
+        prefix = "field__"
+        edits = {k[len(prefix):]: str(v) for k, v in form.items() if k.startswith(prefix)}
+        changes = _edit(application_id, edits)
+        return RedirectResponse(
+            f"/applications/{application_id}/review?saved={len(changes)}", status_code=303
+        )
+
     # ---------- API ----------
 
     @app.post("/api/applications", status_code=201)
@@ -107,6 +145,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def api_get(application_id: int):
         application, journal, analysis = _load(application_id)
         return {"application": application, "journal": journal, "analysis": analysis}
+
+    @app.get("/api/applications/{application_id}/fields")
+    def api_fields(application_id: int):
+        _load(application_id)
+        extracted, finals = _fields(application_id)
+        return {"extracted": extracted, "final": finals}
+
+    @app.put("/api/applications/{application_id}/fields")
+    def api_edit_fields(application_id: int, edits: dict[str, str | None] = Body(...)):
+        changes = _edit(application_id, edits)
+        _, finals = _fields(application_id)
+        return {"changes": changes, "final": finals}
 
     return app
 

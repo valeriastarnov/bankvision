@@ -31,11 +31,9 @@ def _collapse(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def reference_fields(ref: dict) -> dict[str, str]:
-    f = ref["fields"]
-    fields = {k: f[k] for k in ("manufacturer", "model", "serial_number", "year")}
-    fields.update({f"characteristics.{k}": v for k, v in f["characteristics"].items()})
-    return fields
+def reference_fields(ref: dict) -> dict[str, str | None]:
+    """Эталонные поля фикстуры; None — поля нет на этой фикстуре."""
+    return dict(ref["fields"])
 
 
 def compare_field(value: str, text: str) -> tuple[str, float, str]:
@@ -71,7 +69,8 @@ def evaluate(fixtures: Path, settings: Settings) -> list[dict]:
         # Поле проверяется, только если оно реально присутствует в эталонном тексте фикстуры
         # (например, на шильдике нет диаметра обработки).
         entry["fields"] = {
-            name: compare_field(value, entry["text"]) if _squash(value) in _squash(ref_text)
+            name: compare_field(value, entry["text"])
+            if value is not None and _squash(value) in _squash(ref_text)
             else ("нет в эталоне", None, "")
             for name, value in reference_fields(ref).items()
         }
@@ -111,7 +110,7 @@ def to_markdown(results: list[dict]) -> str:
             snippet = snippet.replace("\n", "⏎").replace("|", "\\|")
             score = "—" if score is None else score
             snippet = f"`{snippet}`" if snippet else "—"
-            out.append(f"| {name} | {r['reference'][name]} | {status} | {score} | {snippet} |")
+            out.append(f"| {name} | {r['reference'][name] or '—'} | {status} | {score} | {snippet} |")
         out.append("")
         out.append("Распознанный текст:")
         out.append("```text")

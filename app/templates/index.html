@@ -23,5 +23,17 @@
   </label>
   <p class="hint">Максимальный размер одного файла — {{ (settings.max_file_size / 1048576) | round(1) }} МБ.</p>
   <button type="submit">Создать заявку</button>
+  <div id="processing" class="processing" role="status" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    Идёт обработка файлов: проверка качества фото и распознавание текста.
+    Это может занять до минуты, не закрывайте страницу.
+  </div>
 </form>
+<script>
+  document.querySelector("form").addEventListener("submit", (event) => {
+    const form = event.target;
+    form.querySelector("button[type=submit]").disabled = true;
+    document.getElementById("processing").hidden = false;
+  });
+</script>
 {% endblock %}

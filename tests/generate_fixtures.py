@@ -1,7 +1,8 @@
 """Генератор синтетических фикстур BankVision.
 
 Все данные вымышленные: производитель, модель, номера и характеристики не относятся
-к реальным компаниям. Каждая фикстура сопровождается JSON с эталонными значениями.
+к реальным компаниям. Каждая фикстура сопровождается JSON с эталонными значениями:
+в "fields" — ровно те поля, что напечатаны на этой фикстуре (отсутствующие — null).
 
 Запуск (PowerShell):  .\\.venv\\Scripts\\python.exe tests\\generate_fixtures.py
 """
@@ -21,20 +22,39 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 SEED = 20261026
 PHOTO_JPEG_QUALITY = 90  # типичное качество JPEG с камеры телефона
 
-# Вымышленная запись об оборудовании — эталон для шильдиков и паспортов.
+FIELD_NAMES = (
+    "equipment_type", "manufacturer", "model", "serial_number", "year",
+    "max_diameter_mm", "center_distance_mm", "power_kw", "weight_kg",
+)
+# Поля, которые печатаются на шильдике (остальные — только в паспорте).
+PLATE_FIELDS = ("equipment_type", "manufacturer", "model", "serial_number", "year",
+                "power_kw", "weight_kg")
+
+# Вымышленные записи об оборудовании — эталоны для шильдиков и паспортов.
 EQUIPMENT = {
     "equipment_type": "Станок токарно-винторезный",
     "manufacturer": "ТОКАРЬПРОМ-СИНТЕЗ",
     "model": "ТС-1640М",
     "serial_number": "24-07815",
     "year": "2018",
-    "characteristics": {
-        "max_diameter_mm": "400",
-        "center_distance_mm": "1000",
-        "power_kw": "7.5",
-        "weight_kg": "2800",
-    },
+    "max_diameter_mm": "400",
+    "center_distance_mm": "1000",
+    "power_kw": "7.5",
+    "weight_kg": "2800",
 }
+# Модель, которой не будет в базе аналогов (сценарий «нет подходящих аналогов»).
+EQUIPMENT_UNKNOWN_MODEL = {
+    "equipment_type": "Станок токарный",
+    "manufacturer": "ВЕКТОРСТАН-ДЕМО",
+    "model": "ЛТ-3200Ф",
+    "serial_number": "77-31004",
+    "year": "2021",
+    "max_diameter_mm": "320",
+    "center_distance_mm": "750",
+    "power_kw": "5.5",
+    "weight_kg": "1900",
+}
+SERIAL_MISMATCH = "24-09156"
 
 FONT_CANDIDATES = {
     "regular": [
@@ -60,19 +80,28 @@ def find_font(style: str = "regular") -> Path:
     )
 
 
+def with_fields(eq: dict, **changes) -> dict:
+    """Копия записи с изменёнными полями; None означает «поле не напечатано»."""
+    return {**eq, **changes}
+
+
+def printed_fields(eq: dict, allowed: tuple[str, ...] = FIELD_NAMES) -> dict:
+    return {k: (eq.get(k) if k in allowed else None) for k in FIELD_NAMES}
+
+
 def plate_lines(eq: dict) -> list[tuple[str, bool]]:
-    """Строки шильдика: (текст, жирный)."""
-    ch = eq["characteristics"]
-    return [
-        (eq["manufacturer"], True),
-        (eq["equipment_type"], False),
-        (f"Модель: {eq['model']}", True),
-        (f"Зав. №: {eq['serial_number']}", True),
-        (f"Год выпуска: {eq['year']}", False),
-        (f"Мощность: {ch['power_kw']} кВт", False),
-        (f"Масса: {ch['weight_kg']} кг", False),
-        ("СИНТЕТИЧЕСКИЙ ОБРАЗЕЦ", False),
+    """Строки шильдика: (текст, жирный). Поля со значением None пропускаются."""
+    lines = [
+        ("manufacturer", "{}", True),
+        ("equipment_type", "{}", False),
+        ("model", "Модель: {}", True),
+        ("serial_number", "Зав. №: {}", True),
+        ("year", "Год выпуска: {}", False),
+        ("power_kw", "Мощность: {} кВт", False),
+        ("weight_kg", "Масса: {} кг", False),
     ]
+    out = [(tpl.format(eq[k]), bold) for k, tpl, bold in lines if eq.get(k) is not None]
+    return out + [("СИНТЕТИЧЕСКИЙ ОБРАЗЕЦ", False)]
 
 
 def _add_noise(img: Image.Image, rng: np.random.Generator, sigma: float) -> Image.Image:
@@ -136,23 +165,32 @@ def make_plate_variants(eq: dict, rng: np.random.Generator) -> dict[str, tuple[I
 
 
 def passport_lines(eq: dict) -> list[str]:
-    ch = eq["characteristics"]
-    return [
+    """Строки паспорта. Поля со значением None не печатаются."""
+    def line(key: str, tpl: str) -> list[str]:
+        return [tpl.format(eq[key])] if eq.get(key) is not None else []
+
+    main = (line("equipment_type", "Наименование: {}") + line("manufacturer", "Изготовитель: {}")
+            + line("model", "Модель: {}") + line("serial_number", "Заводской номер: {}")
+            + line("year", "Год выпуска: {}"))
+    specs = (line("max_diameter_mm", "Наибольший диаметр обработки над станиной, мм: {}")
+             + line("center_distance_mm", "Расстояние между центрами, мм: {}")
+             + line("power_kw", "Мощность главного привода, кВт: {}")
+             + line("weight_kg", "Масса станка, кг: {}"))
+    lines = [
         "ПАСПОРТ ОБОРУДОВАНИЯ",
         "Синтетический образец для демонстрации. Не является реальным документом.",
         "",
-        f"Наименование: {eq['equipment_type']}",
-        f"Изготовитель: {eq['manufacturer']}",
-        f"Модель: {eq['model']}",
-        f"Заводской номер: {eq['serial_number']}",
-        f"Год выпуска: {eq['year']}",
-        "",
-        "Технические характеристики",
-        f"Наибольший диаметр обработки над станиной, мм: {ch['max_diameter_mm']}",
-        f"Расстояние между центрами, мм: {ch['center_distance_mm']}",
-        f"Мощность главного привода, кВт: {ch['power_kw']}",
-        f"Масса станка, кг: {ch['weight_kg']}",
+        *main,
     ]
+    if specs:
+        lines += ["", "Технические характеристики", *specs]
+    return lines
+
+
+def _pdf_bytes(doc: pymupdf.Document, **options) -> bytes:
+    """Детерминированный PDF: без дат создания и со стабильным идентификатором."""
+    doc.set_metadata({"producer": "BankVision generate_fixtures.py (synthetic)"})
+    return doc.tobytes(no_new_id=True, **options)
 
 
 def make_text_pdf(eq: dict) -> bytes:
@@ -166,7 +204,7 @@ def make_text_pdf(eq: dict) -> bytes:
             page.insert_text((60, y), line, fontsize=size, fontname="F0", fontfile=font_file)
         y += 26 if i == 0 else 20
     doc.subset_fonts()
-    data = doc.tobytes(garbage=3, deflate=True)
+    data = _pdf_bytes(doc, garbage=3, deflate=True)
     doc.close()
     return data
 
@@ -188,23 +226,44 @@ def make_scan_pdf(text_pdf: bytes, rng: np.random.Generator) -> tuple[bytes, dic
     doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)
     page.insert_image(page.rect, stream=jpg.getvalue())
-    data = doc.tobytes()
+    data = _pdf_bytes(doc)
     doc.close()
     return data, {"render_dpi": dpi, "rotation_deg": angle, "noise_sigma": sigma, "jpeg_quality": 85}
 
 
-def _reference(kind: str, variant: str, distortions: dict, extra: dict | None = None) -> dict:
+def _reference(kind: str, variant: str, distortions: dict, fields: dict,
+               scenario: str, extra: dict | None = None) -> dict:
     ref = {
         "synthetic": True,
         "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
         "kind": kind,
         "variant": variant,
+        "scenario": scenario,
         "distortions": distortions,
-        "fields": EQUIPMENT,
+        "fields": fields,
     }
     if extra:
         ref.update(extra)
     return ref
+
+
+def _plate_ref(variant: str, distortions: dict, eq: dict, scenario: str,
+               extra: dict | None = None) -> dict:
+    return _reference("plate_photo", variant, distortions, printed_fields(eq, PLATE_FIELDS),
+                      scenario, {"plate_text": [t for t, _ in plate_lines(eq)]} | (extra or {}))
+
+
+def _passport_ref(variant: str, distortions: dict, eq: dict, scenario: str, has_text_layer: bool,
+                  extra: dict | None = None) -> dict:
+    return _reference("passport_pdf", variant, distortions, printed_fields(eq), scenario,
+                      {"has_text_layer": has_text_layer, "document_text": passport_lines(eq)}
+                      | (extra or {}))
+
+
+def _jpeg(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=PHOTO_JPEG_QUALITY)
+    return buf.getvalue()
 
 
 def _write(out: Path, name: str, data: bytes, reference: dict) -> None:
@@ -221,25 +280,67 @@ def generate(out: Path = FIXTURES_DIR) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
+
+    def emit(name: str, data: bytes, reference: dict) -> None:
+        _write(out, name, data, reference)
+        written.append(out / name)
+
+    # Порядок генерации важен: от него зависит последовательность случайных чисел.
+    # Новые фикстуры добавляются в конец, чтобы прежние оставались байт-в-байт теми же.
+    plate_scenarios = {"plate_clear": "baseline", "plate_blurred": "poor_quality",
+                       "plate_dark": "poor_quality", "plate_skewed": "baseline"}
     for name, (img, distortions) in make_plate_variants(EQUIPMENT, rng).items():
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=PHOTO_JPEG_QUALITY)
-        _write(out, f"{name}.jpg", buf.getvalue(),
-               _reference("plate_photo", name.removeprefix("plate_"), distortions,
-                          {"plate_text": [t for t, _ in plate_lines(EQUIPMENT)]}))
-        written.append(out / f"{name}.jpg")
+        emit(f"{name}.jpg", _jpeg(img),
+             _plate_ref(name.removeprefix("plate_"), distortions, EQUIPMENT, plate_scenarios[name],
+                        {"pair": "passport_text.pdf"}))
 
     text_pdf = make_text_pdf(EQUIPMENT)
-    _write(out, "passport_text.pdf", text_pdf,
-           _reference("passport_pdf", "text_layer", {},
-                      {"has_text_layer": True, "document_text": passport_lines(EQUIPMENT)}))
-    written.append(out / "passport_text.pdf")
+    emit("passport_text.pdf", text_pdf,
+         _passport_ref("text_layer", {}, EQUIPMENT, "baseline", True, {"pair": "plate_clear.jpg"}))
 
     scan_pdf, distortions = make_scan_pdf(text_pdf, rng)
-    _write(out, "passport_scan.pdf", scan_pdf,
-           _reference("passport_pdf", "scan", distortions,
-                      {"has_text_layer": False, "document_text": passport_lines(EQUIPMENT)}))
-    written.append(out / "passport_scan.pdf")
+    emit("passport_scan.pdf", scan_pdf,
+         _passport_ref("scan", distortions, EQUIPMENT, "baseline", False, {"pair": "plate_clear.jpg"}))
+
+    # --- итерация 2 ---
+    noise_sigma = 4.0
+
+    # Шильдик того же станка, но с другим заводским номером, чем в паспорте.
+    mismatch = with_fields(EQUIPMENT, serial_number=SERIAL_MISMATCH)
+    emit("plate_serial_mismatch.jpg", _jpeg(_add_noise(render_plate(mismatch), rng, noise_sigma)),
+         _plate_ref("clear", {"noise_sigma": noise_sigma}, mismatch, "serial_mismatch",
+                    {"pair": "passport_text.pdf",
+                     "pair_value": {"serial_number": EQUIPMENT["serial_number"]}}))
+
+    # Паспорт без заводского номера.
+    no_serial = with_fields(EQUIPMENT, serial_number=None)
+    emit("passport_no_serial.pdf", make_text_pdf(no_serial),
+         _passport_ref("text_layer", {}, no_serial, "no_serial", True, {"pair": "plate_clear.jpg"}))
+
+    # Оборудование, модели которого не будет в базе аналогов.
+    extra_unknown = {"expected_in_analogs": False}
+    emit("plate_unknown_model.jpg",
+         _jpeg(_add_noise(render_plate(EQUIPMENT_UNKNOWN_MODEL), rng, noise_sigma)),
+         _plate_ref("clear", {"noise_sigma": noise_sigma}, EQUIPMENT_UNKNOWN_MODEL, "no_analogs",
+                    {"pair": "passport_unknown_model.pdf"} | extra_unknown))
+    emit("passport_unknown_model.pdf", make_text_pdf(EQUIPMENT_UNKNOWN_MODEL),
+         _passport_ref("text_layer", {}, EQUIPMENT_UNKNOWN_MODEL, "no_analogs", True,
+                       {"pair": "plate_unknown_model.jpg"} | extra_unknown))
+
+    # Паспорт с минимумом данных: только вид оборудования и модель.
+    minimal = {k: None for k in FIELD_NAMES} | {
+        "equipment_type": EQUIPMENT["equipment_type"], "model": EQUIPMENT["model"]}
+    emit("passport_minimal.pdf", make_text_pdf(minimal),
+         _passport_ref("text_layer", {}, minimal, "insufficient_data", True))
+
+    # Тёмное и одновременно размытое фото — проверка метрики резкости.
+    blur_radius, brightness = 4.0, 0.22
+    dark_blurred = ImageEnhance.Brightness(
+        render_plate(EQUIPMENT).filter(ImageFilter.GaussianBlur(blur_radius))).enhance(brightness)
+    emit("plate_dark_blurred.jpg", _jpeg(_add_noise(dark_blurred, rng, noise_sigma)),
+         _plate_ref("dark_blurred", {"gaussian_blur_radius": blur_radius,
+                                     "brightness_factor": brightness, "noise_sigma": noise_sigma},
+                    EQUIPMENT, "poor_quality"))
     return written
 
 

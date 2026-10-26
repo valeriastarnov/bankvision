@@ -39,6 +39,27 @@ CREATE TABLE IF NOT EXISTS file_analysis (
     text_meta_json TEXT,
     error TEXT
 );
+-- Поля, извлечённые из каждого файла отдельно.
+CREATE TABLE IF NOT EXISTS extracted_fields (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL REFERENCES applications(id),
+    file_id INTEGER NOT NULL REFERENCES files(id),
+    field TEXT NOT NULL,
+    value TEXT NOT NULL,
+    fragment TEXT NOT NULL,
+    method TEXT NOT NULL
+);
+-- Итоговые значения полей заявки (по умолчанию или исправленные вручную).
+CREATE TABLE IF NOT EXISTS final_fields (
+    application_id INTEGER NOT NULL REFERENCES applications(id),
+    field TEXT NOT NULL,
+    value TEXT,
+    origin TEXT NOT NULL,
+    source_file_id INTEGER REFERENCES files(id),
+    manually_edited INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (application_id, field)
+);
 """
 
 
@@ -168,3 +189,56 @@ def get_analysis(conn: sqlite3.Connection, application_id: int) -> dict[int, dic
 
 def set_status(conn: sqlite3.Connection, application_id: int, status: str) -> None:
     conn.execute("UPDATE applications SET status = ? WHERE id = ?", (status, application_id))
+
+
+def replace_extracted(
+    conn: sqlite3.Connection, application_id: int, file_id: int, fields: list[dict]
+) -> None:
+    conn.execute("DELETE FROM extracted_fields WHERE file_id = ?", (file_id,))
+    conn.executemany(
+        "INSERT INTO extracted_fields (application_id, file_id, field, value, fragment, method)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        [(application_id, file_id, f["field"], f["value"], f["fragment"], f["method"]) for f in fields],
+    )
+
+
+def get_extracted(conn: sqlite3.Connection, application_id: int) -> list[dict]:
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT e.file_id, f.kind, f.original_name AS source_name, e.field, e.value,"
+            " e.fragment, e.method FROM extracted_fields e JOIN files f ON f.id = e.file_id"
+            " WHERE e.application_id = ? ORDER BY e.file_id, e.id",
+            (application_id,),
+        )
+    ]
+
+
+def upsert_final(
+    conn: sqlite3.Connection,
+    application_id: int,
+    field: str,
+    value: str | None,
+    origin: str,
+    source_file_id: int | None = None,
+    manually_edited: bool = False,
+) -> None:
+    conn.execute(
+        "INSERT INTO final_fields (application_id, field, value, origin, source_file_id,"
+        " manually_edited, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT (application_id, field) DO UPDATE SET value = excluded.value,"
+        " origin = excluded.origin, source_file_id = excluded.source_file_id,"
+        " manually_edited = excluded.manually_edited, updated_at = excluded.updated_at",
+        (application_id, field, value, origin, source_file_id, int(manually_edited), _now()),
+    )
+
+
+def get_final(conn: sqlite3.Connection, application_id: int) -> dict[str, dict]:
+    return {
+        r["field"]: dict(r) | {"manually_edited": bool(r["manually_edited"])}
+        for r in conn.execute(
+            "SELECT field, value, origin, source_file_id, manually_edited, updated_at"
+            " FROM final_fields WHERE application_id = ?",
+            (application_id,),
+        )
+    }

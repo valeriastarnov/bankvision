@@ -1,4 +1,5 @@
-"""Первичная обработка заявки: качество фото, OCR фото, извлечение текста документа.
+"""Первичная обработка заявки: качество фото, OCR фото, извлечение текста документа,
+извлечение полей из каждого файла и итоговые значения по умолчанию.
 
 Ошибка обработки одного файла не прерывает остальные: она сохраняется в анализе файла
 и в журнале, а заявка получает статус «обработана с ошибками».
@@ -7,7 +8,7 @@ from __future__ import annotations
 
 from app import db
 from app.config import Settings
-from app.services import image_quality, ocr, pdf
+from app.services import extract, image_quality, ocr, pdf, review
 
 STATUS_PROCESSED = "processed"
 STATUS_PROCESSED_WITH_ERRORS = "processed_with_errors"
@@ -62,8 +63,17 @@ def analyze_application(application_id: int, settings: Settings) -> str:
                 sources = ", ".join(result["text_meta"]["sources"])
                 db.log_event(conn, application_id, "text_extracted",
                              f"{f.original_name}: {len(result['text'])} симв., источник: {sources}")
+                # Подписи полей на шильдике часто отсутствуют — для фото разрешены эвристики.
+                fields = extract.extract_fields(
+                    result["text"], f.id, f.original_name, allow_heuristics=f.kind == "photo"
+                )
+                db.replace_extracted(conn, application_id, f.id,
+                                     [x.to_dict() for x in fields.values()])
+                db.log_event(conn, application_id, "fields_extracted",
+                             f"{f.original_name}: {', '.join(fields) or 'поля не найдены'}")
 
     status = STATUS_PROCESSED_WITH_ERRORS if has_errors else STATUS_PROCESSED
     with db.connect(settings.db_path) as conn:
+        review.save_default_finals(conn, application_id)
         db.set_status(conn, application_id, status)
     return status

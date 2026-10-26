@@ -68,6 +68,37 @@ def test_dark_photo_flagged(fixtures):
     assert any("тёмное" in h for h in q.hints)
 
 
+def test_dark_sharp_photo_not_flagged_blurry(fixtures):
+    q = image_quality.assess(fixtures / "plate_dark.jpg", Settings())
+    assert image_quality.FLAG_DARK in q.flags
+    assert image_quality.FLAG_BLURRY not in q.flags, q
+
+
+def test_blurred_photo_with_normal_brightness_flagged(fixtures):
+    q = image_quality.assess(fixtures / "plate_blurred.jpg", Settings())
+    s = Settings()
+    assert s.brightness_min <= q.brightness <= s.brightness_max
+    assert q.flags == [image_quality.FLAG_BLURRY]
+
+
+def test_dark_and_blurred_photo_gets_both_flags(fixtures):
+    q = image_quality.assess(fixtures / "plate_dark_blurred.jpg", Settings())
+    assert set(q.flags) == {image_quality.FLAG_BLURRY, image_quality.FLAG_DARK}
+
+
+def test_low_contrast_sharp_pattern_not_blurry():
+    # Резкие тонкие полосы с перепадом всего 12 уровней яркости из 255.
+    gray = np.full((900, 1200), 20, dtype=np.uint8)
+    gray[:, ::6] = 32
+    gray[::40, :] = 32
+    assert image_quality.FLAG_BLURRY not in image_quality.assess_array(gray, Settings()).flags
+
+
+def test_uniform_image_is_blurry_without_errors():
+    gray = np.full((900, 1200), 128, dtype=np.uint8)
+    assert image_quality.FLAG_BLURRY in image_quality.assess_array(gray, Settings()).flags
+
+
 def test_bright_and_low_resolution_flags():
     gray = np.full((300, 400), 245, dtype=np.uint8)
     gray[::10, :] = 0  # резкие линии, чтобы не сработал флаг размытости

@@ -3,6 +3,7 @@
   "note": "Синтетическая фикстура BankVision. Все данные вымышленные.",
   "kind": "passport_pdf",
   "variant": "scan",
+  "scenario": "baseline",
   "distortions": {
     "render_dpi": 200,
     "rotation_deg": 1.5,
@@ -15,12 +16,10 @@
     "model": "ТС-1640М",
     "serial_number": "24-07815",
     "year": "2018",
-    "characteristics": {
-      "max_diameter_mm": "400",
-      "center_distance_mm": "1000",
-      "power_kw": "7.5",
-      "weight_kg": "2800"
-    }
+    "max_diameter_mm": "400",
+    "center_distance_mm": "1000",
+    "power_kw": "7.5",
+    "weight_kg": "2800"
   },
   "has_text_layer": false,
   "document_text": [
@@ -38,5 +37,6 @@
     "Расстояние между центрами, мм: 1000",
     "Мощность главного привода, кВт: 7.5",
     "Масса станка, кг: 2800"
-  ]
+  ],
+  "pair": "plate_clear.jpg"
 }
