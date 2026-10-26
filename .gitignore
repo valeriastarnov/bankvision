@@ -1,0 +1,28 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Кэш Python и инструментов
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Загруженные пользователями файлы
+data/uploads/
+
+# База SQLite
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Локальные настройки
+.env
+.vscode/
+.idea/
+Thumbs.db

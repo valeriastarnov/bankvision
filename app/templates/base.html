@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}BankVision{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">BankVision</a>
+    <span class="subtitle">оценка залогового оборудования · MVP</span>
+  </header>
+  <div class="notice">
+    Демонстрационный прототип. Тестовые данные синтетические. Система не принимает
+    кредитных решений и не решает, принимать ли залог.
+  </div>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

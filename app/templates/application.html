@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Заявка №{{ application.id }} — BankVision{% endblock %}
+{% block content %}
+<h1>Заявка №{{ application.id }}</h1>
+<p>Создана: {{ application.created_at }} · Статус: {{ application.status }}</p>
+
+<h2>Фото ({{ application.photos | length }})</h2>
+<ul>
+  {% for f in application.photos %}<li>{{ f.original_name }} — {{ (f.size / 1024) | round(1) }} КБ</li>{% endfor %}
+</ul>
+
+<h2>Документ</h2>
+<ul>
+  {% for f in application.documents %}<li>{{ f.original_name }} — {{ (f.size / 1024) | round(1) }} КБ</li>{% endfor %}
+</ul>
+
+<h2>Журнал</h2>
+<table>
+  <tr><th>Время (UTC)</th><th>Событие</th><th>Детали</th></tr>
+  {% for j in journal %}
+  <tr><td>{{ j.created_at }}</td><td>{{ j.event }}</td><td>{{ j.details or "" }}</td></tr>
+  {% endfor %}
+</table>
+
+<p class="hint">Распознавание и оценка будут добавлены в следующих итерациях.</p>
+<p><a href="/">← Новая заявка</a></p>
+{% endblock %}

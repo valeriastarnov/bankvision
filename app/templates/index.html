@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Новая заявка — BankVision{% endblock %}
+{% block content %}
+<h1>Новая заявка</h1>
+
+{% if errors %}
+<div class="errors" role="alert">
+  <strong>Файлы не приняты:</strong>
+  <ul>
+    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" action="/applications" enctype="multipart/form-data">
+  <label>
+    Фото оборудования ({{ settings.min_photos }}–{{ settings.max_photos }} шт., JPG или PNG)
+    <input type="file" name="photos" accept=".jpg,.jpeg,.png" multiple required>
+  </label>
+  <label>
+    Документ на оборудование (PDF, JPG или PNG)
+    <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" required>
+  </label>
+  <p class="hint">Максимальный размер одного файла — {{ (settings.max_file_size / 1048576) | round(1) }} МБ.</p>
+  <button type="submit">Создать заявку</button>
+</form>
+{% endblock %}
