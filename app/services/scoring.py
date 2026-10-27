@@ -58,12 +58,20 @@ def _photo_quality(photo_flags: dict[str, list[str]]) -> tuple[float, str]:
     return len(clean) / len(photo_flags), text
 
 
-def _completeness(finals: dict[str, dict]) -> tuple[float, str]:
-    filled = [f for f in cc.KEY_FIELDS if (finals.get(f) or {}).get("value")]
-    empty = [FIELDS[f] for f in cc.KEY_FIELDS if f not in filled]
+def _completeness(finals: dict[str, dict], checks: dict[str, cc.FieldCheck]) -> tuple[float, str]:
+    """Доля ключевых полей с итоговым значением. Поле, источники которого расходятся
+    или не подтверждены, не засчитывается даже после выбора значения сотрудником:
+    выбор не устраняет противоречие в исходных данных и не должен повышать индекс."""
+    conflicted = [f for f in cc.KEY_FIELDS if checks[f].needs_decision]
+    filled = [f for f in cc.KEY_FIELDS
+              if (finals.get(f) or {}).get("value") and f not in conflicted]
+    empty = [FIELDS[f] for f in cc.KEY_FIELDS if f not in filled and f not in conflicted]
     text = f"заполнено {len(filled)} из {len(cc.KEY_FIELDS)} ключевых полей"
     if empty:
         text += "; нет итогового значения: " + ", ".join(empty)
+    if conflicted:
+        text += ("; не засчитаны из-за расхождения или неподтверждённости источников "
+                 "(независимо от выбора сотрудника): " + ", ".join(FIELDS[f] for f in conflicted))
     return len(filled) / len(cc.KEY_FIELDS), text
 
 
@@ -105,7 +113,7 @@ def compute(checks: dict[str, cc.FieldCheck], finals: dict[str, dict],
     """photo_flags — {имя фото: флаги качества}."""
     parts = {
         "photo_quality": _photo_quality(photo_flags),
-        "completeness": _completeness(finals),
+        "completeness": _completeness(finals, checks),
         "consistency": _consistency(checks, settings),
         "analogs": _analogs(valuation_result, settings),
     }

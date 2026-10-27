@@ -87,13 +87,23 @@ def test_scenario_6_broken_pdf_requests_document_again(client):
 
 @needs_tesseract
 def test_serial_mismatch_goes_to_expert_even_with_high_index(client):
-    app_id, data = _assessment(client, "plate_serial_mismatch.jpg", "passport_text.pdf")
-    # Сотрудник выбрал значение — индекс растёт (поле заполнено), но маршрут остаётся экспертным.
+    app_id, before = _assessment(client, "plate_serial_mismatch.jpg", "passport_text.pdf")
+    assert before["score"]["total"] >= S.routing_score_threshold + 20  # индекс высокий
+    assert before["route"]["route"] == EXPERT
+    assert any("расходится" in r for r in before["route"]["reasons"])
+
+
+@needs_tesseract
+def test_manual_choice_does_not_raise_index(client):
+    app_id, before = _assessment(client, "plate_serial_mismatch.jpg", "passport_text.pdf")
     client.post(f"/applications/{app_id}/review", data={"source__serial_number": "document"})
-    data = client.get(f"/api/applications/{app_id}/assessment").json()
-    assert data["score"]["total"] >= S.routing_score_threshold + 20
-    assert data["route"]["route"] == EXPERT
-    assert any("расходится" in r for r in data["route"]["reasons"])
+    after = client.get(f"/api/applications/{app_id}/assessment").json()
+    assert after["score"]["total"] == before["score"]["total"]
+    by_key = lambda d: {c["key"]: c["contribution"] for c in d["score"]["components"]}  # noqa: E731
+    assert by_key(after) == by_key(before)
+    completeness = next(c for c in after["score"]["components"] if c["key"] == "completeness")
+    assert "независимо от выбора сотрудника" in completeness["explanation"]
+    assert after["route"]["route"] == EXPERT
 
 
 @needs_tesseract
