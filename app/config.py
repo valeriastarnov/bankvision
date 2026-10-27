@@ -51,6 +51,19 @@ class Settings:
     # распознавания в одном символе. Номер и модель нечётко не сравниваются.
     manufacturer_fuzzy_min: float = 90.0
 
+    # --- Оценка по аналогам (docs/methodology_valuation.md) ---
+    # Синтетическая база аналогов (source = synthetic), см. data/analogs_README.md.
+    analogs_path: Path = BASE_DIR / "data" / "analogs.csv"
+    # Минимальное число аналогов для построения диапазона.
+    valuation_min_analogs: int = 3
+    # Годовой коэффициент поправки на возраст: цена × (1 − d)^(год аналога − год объекта).
+    # ДЕМОНСТРАЦИОННОЕ ДОПУЩЕНИЕ, не рыночные данные.
+    valuation_annual_depreciation: float = 0.07
+    # Допуски подбора по классу (относительные): наибольший диаметр обработки
+    # и расстояние между центрами.
+    class_diameter_tolerance: float = 0.10
+    class_center_distance_tolerance: float = 0.20
+
     # --- PDF и OCR ---
     ocr_lang: str = "rus+eng"
     # Страница без текстового слоя: меньше этого числа непробельных символов.

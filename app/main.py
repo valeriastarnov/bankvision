@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import db
 from app.config import Settings
-from app.services import crosscheck, review
+from app.services import crosscheck, review, valuation
 from app.services.analysis import analyze_application
 from app.services.ingest import IncomingFile, UploadError, create_application_with_files
 
@@ -77,6 +77,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except (review.UnknownFieldError, review.InvalidSourceError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    def _valuation(application_id: int):
+        _load(application_id)
+        with db.connect(settings.db_path) as conn:
+            finals = db.get_final(conn, application_id)
+        return valuation.value_application(finals, settings)
+
     # ---------- HTML ----------
 
     @app.get("/", response_class=HTMLResponse)
@@ -139,6 +145,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             f"/applications/{application_id}/review?saved={len(changes)}", status_code=303
         )
 
+    @app.get("/applications/{application_id}/valuation", response_class=HTMLResponse)
+    def view_valuation(request: Request, application_id: int):
+        application, _, _ = _load(application_id)
+        obj, result = _valuation(application_id)
+        return templates.TemplateResponse(
+            request, "valuation.html", {"application": application, "obj": obj, "result": result}
+        )
+
     # ---------- API ----------
 
     @app.post("/api/applications", status_code=201)
@@ -173,6 +187,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         changes = _edit(application_id, edits)
         _, finals, _, _ = _fields(application_id)
         return {"changes": changes, "final": finals}
+
+    @app.get("/api/applications/{application_id}/valuation")
+    def api_valuation(application_id: int):
+        obj, result = _valuation(application_id)
+        return {"object": obj, "valuation": result.to_dict()}
 
     return app
 

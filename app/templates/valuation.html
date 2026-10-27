@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Предварительная оценка — заявка №{{ application.id }}{% endblock %}
+{% macro rub(v) %}{{ "{:,.0f}".format(v).replace(",", " ") }} ₽{% endmacro %}
+
+{% block content %}
+<h1>Предварительная оценка — заявка №{{ application.id }}</h1>
+
+<p class="disclaimer" role="note"><strong>{{ result.disclaimer }}</strong></p>
+
+<section class="file">
+  <h2>Объект оценки (итоговые значения полей)</h2>
+  <table>
+    <tr><th>Вид оборудования</th><td>{{ obj.equipment_type or "неизвестно" }}</td></tr>
+    <tr><th>Модель</th><td>{{ obj.model or "неизвестно" }}</td></tr>
+    <tr><th>Год выпуска</th><td>{{ obj.year or "неизвестно" }}</td></tr>
+    <tr><th>Наибольший диаметр обработки, мм</th><td>{{ obj.max_diameter_mm | int if obj.max_diameter_mm else "неизвестно" }}</td></tr>
+    <tr><th>Расстояние между центрами, мм</th><td>{{ obj.center_distance_mm | int if obj.center_distance_mm else "неизвестно" }}</td></tr>
+  </table>
+  <p class="hint">Значения берутся с <a href="/applications/{{ application.id }}/review">экрана проверки полей</a>;
+    поля, ожидающие решения сотрудника, считаются неизвестными.</p>
+</section>
+
+<section class="file">
+  <h2>Результат</h2>
+  <p>Уровень совпадения аналогов: <strong>{{ result.level_label }}</strong>
+    <span class="hint">(по модели найдено: {{ result.exact_count }}, по классу: {{ result.class_count }})</span></p>
+  {% if result.has_range %}
+    <p class="estimate">
+      Медиана: <strong>{{ rub(result.median_rub) }}</strong><br>
+      Диапазон P25–P75: <strong>{{ rub(result.p25_rub) }} — {{ rub(result.p75_rub) }}</strong>
+    </p>
+  {% else %}
+    <p class="error">Диапазон стоимости не построен.</p>
+  {% endif %}
+  <h3>Флаги</h3>
+  <ul class="warnings">{% for f in result.flags %}<li>{{ f }}</li>{% endfor %}</ul>
+</section>
+
+{% if result.analogs %}
+<section>
+  <h2>Использованные аналоги ({{ result.analogs | length }})</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>ID</th><th>Модель</th><th>Производитель</th><th>Год</th><th>Дата объявления</th>
+        <th>Цена в объявлении</th><th>Разница лет</th><th>Поправка на возраст</th>
+        <th>Скорректированная цена</th><th>Источник</th></tr>
+    {% for a in result.analogs %}
+    <tr>
+      <td>{{ a.id }}</td><td>{{ a.model }}</td><td>{{ a.manufacturer }}</td><td>{{ a.year }}</td>
+      <td>{{ a.listing_date }}</td><td>{{ rub(a.price_rub) }}</td>
+      <td>{{ "%+d" | format(a.years_diff) if a.years_diff is not none else "—" }}</td>
+      <td>×{{ "%.3f" | format(a.age_factor) }}</td><td>{{ rub(a.adjusted_price_rub) }}</td>
+      <td>{{ a.source }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="hint">
+  <h2>Параметры и ограничения</h2>
+  <p>Поправка на возраст: цена × (1 − {{ result.params.annual_depreciation }})^(год аналога − год объекта)
+    — демонстрационное допущение, не рыночные данные. Минимум аналогов для диапазона:
+    {{ result.params.min_analogs }}. Допуски по классу: диаметр ±{{ (result.params.class_diameter_tolerance * 100) | round | int }}%,
+    РМЦ ±{{ (result.params.class_center_distance_tolerance * 100) | round | int }}%.</p>
+  <p>Не учитываются: техническое состояние, наработка, комплектация, регион, торг.
+    Цены объявлений не равны ценам сделок. База аналогов синтетическая.</p>
+</section>
+
+<p><a href="/applications/{{ application.id }}/review">← К проверке полей</a> ·
+   <a href="/applications/{{ application.id }}">К заявке</a></p>
+{% endblock %}

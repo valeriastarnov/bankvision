@@ -23,7 +23,8 @@
 <h1>Заявка №{{ application.id }}</h1>
 <p>Создана: {{ application.created_at }} · Статус: {{ status_labels.get(application.status, application.status) }}</p>
 <p class="hint">Текст ниже — сырой результат автоматического распознавания, без исправлений.</p>
-<p><a class="button-link" href="/applications/{{ application.id }}/review">Проверить и исправить поля →</a></p>
+<p><a class="button-link" href="/applications/{{ application.id }}/review">Проверить и исправить поля →</a>
+   <a class="button-link" href="/applications/{{ application.id }}/valuation">Предварительная оценка →</a></p>
 
 <h2>Фото ({{ application.photos | length }})</h2>
 {% for f in application.photos %}
