@@ -64,6 +64,28 @@ class Settings:
     class_diameter_tolerance: float = 0.10
     class_center_distance_tolerance: float = 0.20
 
+    # --- Индекс полноты и согласованности данных (docs/methodology_score.md) ---
+    # Правило-ориентированный балл 0–100. Не вероятность и не уверенность.
+    # Веса выбраны экспертно и НЕ откалиброваны.
+    score_weights: dict = field(default_factory=lambda: {
+        "photo_quality": 20, "completeness": 30, "consistency": 30, "analogs": 20,
+    })
+    # Балл согласованности ключевого поля по статусу сверки (0–1).
+    score_consistency: dict = field(default_factory=lambda: {
+        "match_good_photo": 1.0,
+        "match_low_quality_photo": 0.5,  # совпадение только на фото с флагом качества
+        "single_source": 0.25,
+        "not_confirmed": 0.0,
+        "mismatch": 0.0,
+        "missing": 0.0,
+    })
+    # Балл достаточности аналогов (0–1).
+    score_analogs: dict = field(default_factory=lambda: {
+        "model_range": 1.0, "class_range": 0.7, "below_minimum": 0.3, "none": 0.0,
+    })
+    # Индекс ниже порога → «Требуется экспертная проверка». Порог = половина шкалы.
+    routing_score_threshold: float = 50.0
+
     # --- PDF и OCR ---
     ocr_lang: str = "rus+eng"
     # Страница без текстового слоя: меньше этого числа непробельных символов.

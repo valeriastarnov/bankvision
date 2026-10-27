@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import db
 from app.config import Settings
-from app.services import crosscheck, review, valuation
+from app.services import crosscheck, report, review, valuation
 from app.services.analysis import analyze_application
 from app.services.ingest import IncomingFile, UploadError, create_application_with_files
 
@@ -83,6 +83,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             finals = db.get_final(conn, application_id)
         return valuation.value_application(finals, settings)
 
+    def _assess(application_id: int) -> report.ApplicationAssessment:
+        result = report.assess(settings, application_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена.")
+        return result
+
     # ---------- HTML ----------
 
     @app.get("/", response_class=HTMLResponse)
@@ -110,11 +116,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/applications/{application_id}", response_class=HTMLResponse)
     def view_application(request: Request, application_id: int):
-        application, journal, analysis = _load(application_id)
+        a = _assess(application_id)
         return templates.TemplateResponse(
             request,
             "application.html",
-            {"application": application, "journal": journal, "analysis": analysis},
+            {"application": a.application, "journal": a.journal, "analysis": a.analysis,
+             "score": a.score, "route": a.route},
         )
 
     @app.get("/applications/{application_id}/review", response_class=HTMLResponse)
@@ -151,6 +158,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         obj, result = _valuation(application_id)
         return templates.TemplateResponse(
             request, "valuation.html", {"application": application, "obj": obj, "result": result}
+        )
+
+    @app.get("/applications/{application_id}/report", response_class=HTMLResponse)
+    def view_report(request: Request, application_id: int):
+        a = _assess(application_id)
+        return templates.TemplateResponse(
+            request, "report.html",
+            {"a": a, "no_credit_decision": report.NO_CREDIT_DECISION,
+             "synthetic_note": report.SYNTHETIC_NOTE, "limitations": report.LIMITATIONS},
         )
 
     # ---------- API ----------
@@ -192,6 +208,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def api_valuation(application_id: int):
         obj, result = _valuation(application_id)
         return {"object": obj, "valuation": result.to_dict()}
+
+    @app.get("/api/applications/{application_id}/assessment")
+    def api_assessment(application_id: int):
+        a = _assess(application_id)
+        return {
+            "score": a.score.to_dict(),
+            "route": a.route.to_dict(),
+            "flags": a.flags,
+            "valuation": a.valuation.to_dict(),
+            "crosscheck": {name: c.to_dict() for name, c in a.checks.items()},
+            "document_error": a.document_error,
+        }
 
     return app
 

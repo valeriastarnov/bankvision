@@ -1,0 +1,38 @@
+{# Маршрут и индекс. Переменные: route, score. #}
+<section class="route route-{{ route.route }}" aria-labelledby="route-title">
+  <h2 id="route-title">Маршрут: {{ route.label }}</h2>
+  <p class="hint">Маршрут — рекомендация по дальнейшей работе с заявкой, не кредитное решение.</p>
+  <h3>Причины</h3>
+  <ul>{% for r in route.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% if route.resolutions %}
+    <h3>Расхождения и как они разрешены</h3>
+    <ul>{% for r in route.resolutions %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if route.requests %}
+    <h3>Что запросить у клиента</h3>
+    <ul>{% for r in route.requests %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if route.other_findings %}
+    <h3>Дополнительно (правила более низкого приоритета)</h3>
+    <ul>{% for r in route.other_findings %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if route.info %}
+    <h3>Информационно (на маршрут не влияет)</h3>
+    <ul>{% for r in route.info %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<section class="score" aria-labelledby="score-title">
+  <h2 id="score-title">{{ score.name }}: {{ score.total | round(1) }} из {{ score.max_total | int }}</h2>
+  <p class="hint">Правило-ориентированный балл: сумма вкладов компонентов. Не вероятность и не
+    уверенность; веса выбраны экспертно и не откалиброваны (docs/methodology_score.md).</p>
+  <table>
+    <tr><th>Компонент</th><th>Вес</th><th>Оценка (0–1)</th><th>Вклад</th><th>Основание</th></tr>
+    {% for c in score.components %}
+    <tr>
+      <td>{{ c.label }}</td><td>{{ c.weight | int }}</td><td>{{ "%.2f" | format(c.subscore) }}</td>
+      <td><strong>{{ "%.1f" | format(c.contribution) }}</strong></td><td>{{ c.explanation }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>

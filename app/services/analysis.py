@@ -47,7 +47,8 @@ def analyze_application(application_id: int, settings: Settings) -> str:
             else:
                 result = _analyze_document(path, settings)
         except (image_quality.ImageReadError, pdf.DocumentError, ocr.OcrUnavailableError) as exc:
-            result = {"error": str(exc)}
+            # В сообщении — имя файла, под которым его загрузил клиент, а не имя хранения.
+            result = {"error": str(exc).replace(path.name, f.original_name)}
 
         with db.connect(settings.db_path) as conn:
             db.save_analysis(conn, f.id, **result)

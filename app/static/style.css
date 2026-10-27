@@ -54,3 +54,29 @@ main:has(.review) { max-width: 1100px; }
 main:has(.estimate), main:has(.disclaimer) { max-width: 1100px; }
 .disclaimer { background: #fde8e8; border: 2px solid #d94040; color: #7a1a1a; border-radius: 8px; padding: 10px 14px; }
 .estimate { font-size: 1.1rem; }
+main:has(.report), main:has(.route) { max-width: 1100px; }
+.route { border-radius: 8px; padding: 4px 16px 10px; margin: 16px 0; border: 2px solid; background: #fff; }
+.route-expert_review { border-color: #d94040; }
+.route-request_materials { border-color: #e39a2d; }
+.route-ready_for_officer { border-color: #3c8d5a; }
+.route h2 { margin-bottom: 0; }
+.score { background: #fff; border: 1px solid #dde1e6; border-radius: 8px; padding: 4px 16px 10px; margin-bottom: 16px; }
+.no-credit { background: #eef0f3; border-left: 4px solid #1f3a5f; padding: 8px 12px; }
+.synthetic { color: #7a4a00; }
+.report section { margin-bottom: 18px; }
+.report-foot { border-top: 1px solid #dde1e6; margin-top: 24px; padding-top: 8px; }
+
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+  body { background: #fff; color: #000; font-size: 10.5pt; }
+  header:not(.report-head), .notice, .no-print, button { display: none !important; }
+  main { max-width: none; margin: 0; padding: 0; }
+  a { color: #000; text-decoration: none; }
+  table { font-size: 9pt; }
+  th, td { padding: 3px 5px; }
+  tr, .route li, .score tr { break-inside: avoid; }
+  h2 { break-after: avoid; }
+  .report section { break-inside: auto; }
+  .status, .badge, .disclaimer, .route { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .table-wrap { overflow: visible; }
+}

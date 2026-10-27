@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% set app_ = a.application %}
+{% set route = a.route %}
+{% set score = a.score %}
+{% set result = a.valuation %}
+{% set obj = a.valuation_object %}
+{% block title %}Отчёт по заявке №{{ app_.id }} — BankVision{% endblock %}
+{% macro rub(v) %}{{ "{:,.0f}".format(v).replace(",", " ") }} ₽{% endmacro %}
+{% macro final_value(name) %}{{ (a.finals.get(name) or {}).get("value") or "—" }}{% endmacro %}
+
+{% block content %}
+<article class="report">
+<header class="report-head">
+  <h1>Отчёт по заявке №{{ app_.id }}</h1>
+  <p>Создана: {{ app_.created_at }} UTC · BankVision MVP</p>
+  <p class="no-credit" role="note"><strong>{{ no_credit_decision }}</strong></p>
+  <p class="synthetic" role="note">{{ synthetic_note }}</p>
+  <p class="no-print"><button type="button" onclick="window.print()">Печать / сохранить в PDF</button>
+    <a href="/applications/{{ app_.id }}">← К заявке</a></p>
+</header>
+
+<section>
+  <h2>1. Объект</h2>
+  <table>
+    {% for row in a.rows %}
+      {% if row.field in ("equipment_type", "manufacturer", "model", "serial_number", "year") %}
+      <tr><th>{{ row.label }}</th><td>{{ final_value(row.field) }}</td></tr>
+      {% endif %}
+    {% endfor %}
+  </table>
+</section>
+
+<section>
+  <h2>2. Источники</h2>
+  <table>
+    <tr><th>Файл</th><th>Тип</th><th>Размер</th><th>Обработка</th></tr>
+    {% for f in app_.files %}
+    {% set an = a.analysis.get(f.id, {}) %}
+    <tr>
+      <td>{{ f.original_name }}</td>
+      <td>{{ "фото" if f.kind == "photo" else "документ" }}</td>
+      <td>{{ (f.size / 1024) | round(1) }} КБ</td>
+      <td>
+        {% if an.error %}<span class="error">{{ an.error }}</span>
+        {% elif an.quality %}{{ "флаги качества: " ~ an.quality.flags | join(", ") if an.quality.flags else "качество: замечаний нет" }}
+        {% elif an.text_meta %}текст: {{ an.text_meta.sources | join(", ") }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section>
+  <h2>3. Поля и сверка источников</h2>
+  <table class="fields">
+    <tr><th>Поле</th><th>Документ</th><th>Фото</th><th>Сверка</th><th>Итог</th></tr>
+    {% for row in a.rows %}
+    {% set c = row.check %}
+    <tr>
+      <th scope="row">{{ row.label }}</th>
+      <td>{% if row.document %}{{ row.document.value }}<div class="fragment">«{{ row.document.fragment }}»</div>{% else %}—{% endif %}</td>
+      <td>{% for p in row.photos %}{{ p.value }}<div class="fragment">{{ p.source_name }}: «{{ p.fragment }}»{% if p.low_quality %} · фото с флагом качества{% endif %}</div>{% else %}—{% endfor %}</td>
+      <td><span class="status status-{{ c.status }}">{{ c.status_label }}</span>
+        {% if c.normalization %}<div class="fragment">нормализовано: {{ c.normalization | join("; ") }}</div>{% endif %}</td>
+      <td>{{ row.final.value or "—" }}{% if row.final.manually_edited %}<div class="fragment">решение сотрудника</div>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section>
+  <h2>4. Правки сотрудника</h2>
+  {% if a.edits %}
+  <table>
+    <tr><th>Время (UTC)</th><th>Поле: было → стало</th></tr>
+    {% for e in a.edits %}<tr><td>{{ e.created_at }}</td><td>{{ e.details }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p>Правок не было.</p>{% endif %}
+</section>
+
+<section>
+  <h2>5. Флаги</h2>
+  {% if a.flags or result.flags %}
+  <ul>
+    {% for f in a.flags %}<li>{{ f }}</li>{% endfor %}
+    {% for f in result.flags %}<li>{{ f }}</li>{% endfor %}
+  </ul>
+  {% else %}<p>Флагов нет.</p>{% endif %}
+</section>
+
+<section>
+  <h2>6. Предварительная оценка</h2>
+  <p class="disclaimer"><strong>{{ result.disclaimer }}</strong></p>
+  <p>Уровень совпадения аналогов: <strong>{{ result.level_label }}</strong>.
+  {% if result.has_range %}
+    Медиана: <strong>{{ rub(result.median_rub) }}</strong>; диапазон P25–P75:
+    <strong>{{ rub(result.p25_rub) }} — {{ rub(result.p75_rub) }}</strong>.
+  {% else %}
+    <strong>Диапазон стоимости не построен.</strong>
+  {% endif %}</p>
+  {% if result.analogs %}
+  <table>
+    <tr><th>ID</th><th>Модель</th><th>Год</th><th>Цена</th><th>Разница лет</th><th>Поправка</th><th>Скоррект. цена</th><th>Источник</th></tr>
+    {% for an in result.analogs %}
+    <tr><td>{{ an.id }}</td><td>{{ an.model }}</td><td>{{ an.year }}</td><td>{{ rub(an.price_rub) }}</td>
+      <td>{{ "%+d" | format(an.years_diff) if an.years_diff is not none else "—" }}</td>
+      <td>×{{ "%.3f" | format(an.age_factor) }}</td><td>{{ rub(an.adjusted_price_rub) }}</td><td>{{ an.source }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <p class="hint">Поправка на возраст: × (1 − {{ result.params.annual_depreciation }})^(год аналога − год объекта),
+    демонстрационное допущение. Методика: docs/methodology_valuation.md.</p>
+</section>
+
+<section class="report-assessment">
+  <h2>7. Индекс и маршрут</h2>
+  {% include "_assessment.html" %}
+</section>
+
+<section>
+  <h2>8. Ограничения</h2>
+  <ul>{% for l in limitations %}<li>{{ l }}</li>{% endfor %}</ul>
+</section>
+
+<footer class="report-foot">
+  <p><strong>{{ no_credit_decision }}</strong></p>
+  <p>{{ result.disclaimer }}</p>
+</footer>
+</article>
+{% endblock %}
